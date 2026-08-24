@@ -1,0 +1,16 @@
+{
+  "name": "llm-chat",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal LAN chat UI for a local llama-server instance",
+  "scripts": {
+    "install:web": "npm --prefix web install",
+    "build": "npm --prefix web run build",
+    "start": "node server.js",
+    "dev:server": "node --watch server.js",
+    "dev:web": "npm --prefix web run dev",
+    "setup": "npm run install:web && npm run build"
+  },
+  "engines": { "node": ">=20" }
+}

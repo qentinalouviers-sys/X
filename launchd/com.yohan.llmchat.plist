@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.yohan.llmchat</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/node</string>
+        <string>/Users/yohan/llm-chat/server.js</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/yohan/llm-chat</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PORT</key>
+        <string>3000</string>
+        <key>HOST</key>
+        <string>0.0.0.0</string>
+        <key>LLM_UPSTREAM</key>
+        <string>http://127.0.0.1:8080</string>
+        <!-- La clé n'est PAS ici: les .plist de LaunchAgents sont lisibles par
+             tout process de la session. server.js lit ~/.qwen38-api-key. -->
+        <key>LLM_API_KEY_FILE</key>
+        <string>/Users/yohan/.qwen38-api-key</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/Users/yohan/Library/Logs/llm-chat.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/yohan/Library/Logs/llm-chat.error.log</string>
+
+    <key>ProcessType</key>
+    <string>Interactive</string>
+</dict>
+</plist>
