@@ -10,7 +10,8 @@
     "start": "node server.js",
     "dev:server": "node --watch server.js",
     "dev:web": "npm --prefix web run dev",
-    "setup": "npm run install:web && npm run build"
+    "setup": "npm run install:web && npm run build",
+    "hash-password": "node server.js --hash-password"
   },
   "engines": { "node": ">=20" }
 }

@@ -1,4 +1,4 @@
-import { CONTEXT_SIZE } from '../lib/api.js';
+import { CONTEXT_SIZE, logout } from '../lib/api.js';
 
 function Slider({ label, value, min, max, step, onChange, hint }) {
   return (
@@ -71,6 +71,19 @@ export default function SettingsPanel({ open, onClose, settings, onChange, conve
           <div className="rounded-lg bg-neutral-950 p-3 text-[11px] leading-relaxed text-neutral-500 ring-1 ring-neutral-800">
             Contexte serveur : {CONTEXT_SIZE} tokens, <code>--parallel 1</code>. Le compteur de contexte est une
             estimation recalibrée sur les <code>prompt_tokens</code> réellement renvoyés par le serveur.
+          </div>
+
+          <div className="space-y-2 border-t border-neutral-800 pt-4">
+            <button
+              onClick={() => logout()}
+              className="w-full rounded-lg border border-neutral-800 px-3 py-2 text-sm text-neutral-300 hover:border-red-800 hover:text-red-300"
+            >
+              Se déconnecter
+            </button>
+            <p className="text-[11px] leading-relaxed text-neutral-600">
+              Les conversations restent stockées dans ce navigateur : la déconnexion ne les efface pas.
+              Supprimez-les depuis la barre latérale si l'appareil n'est pas le vôtre.
+            </p>
           </div>
         </div>
       </aside>

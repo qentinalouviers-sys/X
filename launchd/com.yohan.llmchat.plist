@@ -26,6 +26,13 @@
              tout process de la session. server.js lit ~/.qwen38-api-key. -->
         <key>LLM_API_KEY_FILE</key>
         <string>/Users/yohan/.qwen38-api-key</string>
+        <!-- Idem pour le mot de passe d'accès (chmod 600). -->
+        <key>APP_PASSWORD_FILE</key>
+        <string>/Users/yohan/.llm-chat-password</string>
+        <!-- À 1 uniquement derrière un reverse proxy de confiance:
+             active la lecture de X-Forwarded-Proto et X-Forwarded-For. -->
+        <key>TRUST_PROXY</key>
+        <string>1</string>
     </dict>
 
     <key>RunAtLoad</key>

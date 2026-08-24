@@ -1,5 +1,24 @@
 export const CONTEXT_SIZE = 8192;
 
+/**
+ * The session cookie is HttpOnly, so the front cannot inspect it; a 401 is the
+ * only signal that it expired. Bounce to the login form and come back here.
+ */
+function requireSession(res) {
+  if (res.status === 401) {
+    const next = encodeURIComponent(location.pathname + location.search);
+    location.href = `/auth/login?next=${next}`;
+    throw new Error('session expirée');
+  }
+  return res;
+}
+
+export function logout() {
+  return fetch('/auth/logout', { method: 'POST' }).finally(() => {
+    location.href = '/auth/login';
+  });
+}
+
 /** Normalized server states used across the UI. */
 export const STATE = {
   UNKNOWN: 'unknown',
@@ -21,6 +40,7 @@ export async function checkHealth(signal) {
     if (err.name === 'AbortError') throw err;
     return { state: STATE.OFFLINE, detail: 'serveur injoignable' };
   }
+  requireSession(res);
   if (res.ok) return { state: STATE.ONLINE, detail: 'prêt' };
   if (res.status === 503) return { state: STATE.LOADING, detail: 'chargement du modèle…' };
   if (res.status === 502) return { state: STATE.OFFLINE, detail: 'llama-server hors ligne' };
@@ -28,7 +48,7 @@ export async function checkHealth(signal) {
 }
 
 export async function fetchModels(signal) {
-  const res = await fetch('/api/v1/models', { signal, cache: 'no-store' });
+  const res = requireSession(await fetch('/api/v1/models', { signal, cache: 'no-store' }));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   return (json.data || []).map((m) => m.id).filter(Boolean);
@@ -72,7 +92,7 @@ export async function* streamChat({ messages, model, params, signal }) {
       body: JSON.stringify(payload),
     });
 
-  let res = await post(body);
+  let res = requireSession(await post(body));
   if (res.status === 400) {
     // Builds without stream_options reject the whole request; retry plainly
     // and give up on the exact token accounting rather than on the answer.
