@@ -1,49 +1,44 @@
 import { STATE } from '../lib/api.js';
 import ContextGauge from './ContextGauge.jsx';
 
-const DOTS = {
-  [STATE.ONLINE]: 'bg-emerald-500',
-  [STATE.LOADING]: 'bg-amber-400 animate-pulse',
-  [STATE.OFFLINE]: 'bg-red-500',
-  [STATE.UNKNOWN]: 'bg-neutral-600 animate-pulse',
-};
-
-const LABELS = {
-  [STATE.ONLINE]: 'en ligne',
-  [STATE.LOADING]: 'chargement du modèle',
-  [STATE.OFFLINE]: 'hors ligne',
-  [STATE.UNKNOWN]: 'connexion',
+const LINK = {
+  [STATE.ONLINE]: { text: 'LINK::SECURE', cls: 'text-acc', dot: 'bg-acc' },
+  [STATE.LOADING]: { text: 'LINK::WARMUP', cls: 'text-warn', dot: 'bg-warn animate-pulse' },
+  [STATE.OFFLINE]: { text: 'LINK::DOWN', cls: 'text-danger', dot: 'bg-danger' },
+  [STATE.UNKNOWN]: { text: 'LINK::PROBE', cls: 'text-dim', dot: 'bg-dim animate-pulse' },
 };
 
 export default function StatusBar({ status, model, usage, onToggleSidebar, onToggleSettings, title }) {
+  const link = LINK[status.state];
+
   return (
-    <header className="flex shrink-0 items-center gap-2 border-b border-neutral-800 bg-neutral-950/90 px-3 py-2 backdrop-blur">
-      <button
-        className="rounded p-1.5 text-neutral-400 hover:bg-neutral-800 md:hidden"
-        onClick={onToggleSidebar}
-        aria-label="Conversations"
-      >
-        ☰
-      </button>
+    <header className="shrink-0 border-b border-line bg-pit/95 backdrop-blur">
+      <div className="flex items-center gap-2 px-2 py-1.5 sm:px-3">
+        <button className="btn btn-ghost md:hidden" onClick={onToggleSidebar} aria-label="Sessions">
+          ▤
+        </button>
 
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-medium">{title}</div>
-        <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-          <span className={`inline-block h-1.5 w-1.5 rounded-full ${DOTS[status.state]}`} />
-          <span>{LABELS[status.state]}</span>
-          {model && <span className="truncate font-mono">· {model}</span>}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-acc glow">❯</span>
+            <span className="truncate text-[13px] text-fg">{title}</span>
+          </div>
+          <div className="mt-0.5 flex items-center gap-2 overflow-hidden">
+            <span className={`inline-block h-1.5 w-1.5 shrink-0 ${link.dot}`} />
+            <span className={`label shrink-0 ${link.cls}`}>{link.text}</span>
+            <span className="label truncate">
+              NODE::{model ? model.toUpperCase() : '—'}
+            </span>
+          </div>
         </div>
+
+        <ContextGauge usage={usage} />
+
+        <button className="btn btn-ghost" onClick={onToggleSettings} aria-label="Configuration">
+          ⚙
+        </button>
       </div>
-
-      <ContextGauge usage={usage} />
-
-      <button
-        className="rounded p-1.5 text-neutral-400 hover:bg-neutral-800"
-        onClick={onToggleSettings}
-        aria-label="Réglages"
-      >
-        ⚙
-      </button>
+      <div className="rule" />
     </header>
   );
 }

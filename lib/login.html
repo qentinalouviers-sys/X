@@ -5,44 +5,149 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
 <meta name="color-scheme" content="dark">
-<title>Connexion</title>
+<meta name="theme-color" content="#04070a">
+<title>NULLNODE // AUTH</title>
+
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="NULLNODE">
+
 <style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100dvh; display: grid; place-items: center;
-    background: #0a0a0a; color: #e5e5e5; padding: 1.5rem;
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  form { width: 100%; max-width: 22rem; }
-  h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .25rem; }
-  p.sub { margin: 0 0 1.25rem; font-size: .8rem; color: #737373; }
-  label { display: block; font-size: .8rem; color: #a3a3a3; margin-bottom: .4rem; }
-  input {
-    width: 100%; padding: .7rem .8rem; font-size: 16px; color: #f5f5f5;
-    background: #171717; border: 1px solid #333; border-radius: .6rem; outline: none;
-  }
-  input:focus { border-color: #0284c7; }
-  button {
-    width: 100%; margin-top: .85rem; padding: .7rem; font-size: .9rem; font-weight: 500;
-    color: #fff; background: #0284c7; border: 0; border-radius: .6rem; cursor: pointer;
-  }
-  button:hover { background: #0369a1; }
-  .error {
-    margin: 0 0 1rem; padding: .6rem .75rem; font-size: .8rem; border-radius: .5rem;
-    color: #fca5a5; background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
-  }
+/* Everything here is CSS-only on purpose: the CSP forbids inline scripts, and
+   this page must still work if the SPA bundle is broken. */
+:root{
+  color-scheme:dark;
+  --void:#04070a; --panel:#0a1017; --line:#17242f;
+  --fg:#b9cec6; --dim:#63796f; --faint:#35473f;
+  --acc:#22e07a; --acc2:#2ad4ff; --danger:#ff3b58;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,"JetBrains Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;display:grid;place-items:center;padding:1.5rem;
+  background:var(--void);color:var(--fg);font:13px/1.6 var(--mono);
+  background-image:
+    linear-gradient(rgba(34,224,122,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(34,224,122,.022) 1px,transparent 1px);
+  background-size:34px 34px;
+}
+
+/* CRT overlay */
+body::after{
+  content:"";position:fixed;inset:0;z-index:9;pointer-events:none;mix-blend-mode:multiply;
+  background:
+    repeating-linear-gradient(to bottom,transparent 0 2px,rgba(0,0,0,.22) 3px 4px),
+    radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,.65) 100%);
+  animation:flicker 5.5s steps(1) infinite;
+}
+@keyframes flicker{0%,96%,100%{opacity:1}97%{opacity:.86}98%{opacity:1}99%{opacity:.92}}
+
+.shell{width:100%;max-width:25rem}
+
+.box{border:1px solid var(--line);background:var(--panel);position:relative}
+/* corner brackets */
+.box::before,.box::after{
+  content:"";position:absolute;width:14px;height:14px;border-color:var(--acc);opacity:.6;pointer-events:none;
+}
+.box::before{top:-1px;left:-1px;border-top:1px solid;border-left:1px solid}
+.box::after{bottom:-1px;right:-1px;border-bottom:1px solid;border-right:1px solid}
+
+.bar{
+  display:flex;align-items:center;gap:.6rem;
+  border-bottom:1px solid var(--line);padding:.55rem .8rem;
+}
+.dot{width:6px;height:6px;background:var(--acc);box-shadow:0 0 8px var(--acc);animation:pulse 2s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.brand{color:var(--acc);letter-spacing:.24em;font-size:11px;text-shadow:0 0 10px currentColor}
+.bar .id{margin-left:auto;color:var(--faint);font-size:10px;letter-spacing:.16em}
+
+.body{padding:1.1rem .9rem 1rem}
+
+/* boot log: each line wiped in by a width animation, one after another */
+.log{margin:0 0 1.1rem;padding:0;list-style:none;font-size:11px;color:var(--dim);letter-spacing:.06em}
+.log li{
+  white-space:nowrap;overflow:hidden;width:0;
+  animation:wipe .34s steps(28) forwards;
+}
+.log li:nth-child(1){animation-delay:.05s}
+.log li:nth-child(2){animation-delay:.34s}
+.log li:nth-child(3){animation-delay:.63s}
+.log li:nth-child(4){animation-delay:.92s}
+.log b{color:var(--acc);font-weight:400}
+.log .warn{color:var(--danger)}
+@keyframes wipe{to{width:100%}}
+
+.gate{opacity:0;animation:fade .5s ease-out 1.25s forwards}
+@keyframes fade{to{opacity:1}}
+
+label{display:block;font-size:10px;letter-spacing:.18em;color:var(--acc);margin-bottom:.45rem;text-transform:uppercase}
+.input{display:flex;align-items:center;border:1px solid var(--line);background:var(--void)}
+.input:focus-within{border-color:rgba(34,224,122,.55)}
+.input span{padding:0 .1rem 0 .65rem;color:var(--acc);text-shadow:0 0 10px currentColor}
+input[type=password]{
+  flex:1;min-width:0;padding:.7rem .65rem;font:16px var(--mono);letter-spacing:.25em;
+  color:var(--fg);background:transparent;border:0;outline:none;
+}
+button{
+  width:100%;margin-top:.75rem;padding:.72rem;cursor:pointer;
+  font:11px var(--mono);letter-spacing:.2em;text-transform:uppercase;
+  color:var(--acc);background:rgba(34,224,122,.08);border:1px solid rgba(34,224,122,.45);
+  transition:background .12s,box-shadow .12s;
+}
+button:hover{background:rgba(34,224,122,.18);box-shadow:0 0 18px rgba(34,224,122,.18)}
+
+.error{
+  margin:0 0 .9rem;padding:.55rem .7rem;font-size:11px;letter-spacing:.08em;
+  color:var(--danger);background:rgba(255,59,88,.08);border:1px solid rgba(255,59,88,.35);
+  animation:glitch .28s steps(2) 2;
+}
+@keyframes glitch{0%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}100%{transform:translateX(0)}}
+
+.foot{margin-top:.9rem;font-size:10px;letter-spacing:.14em;color:var(--faint);text-align:center}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important}
+  .log li{width:100%}
+  .gate{opacity:1}
+}
 </style>
 </head>
 <body>
-  <form method="POST" action="/auth/login" autocomplete="on">
-    <h1>llm-chat</h1>
-    <p class="sub">Instance privée. Accès protégé par mot de passe.</p>
-    <!--ERROR-->
-    <label for="password">Mot de passe</label>
-    <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
-    <input type="hidden" name="next" value="<!--NEXT-->">
-    <button type="submit">Se connecter</button>
-  </form>
+  <div class="shell">
+    <form class="box" method="POST" action="/auth/login" autocomplete="on">
+      <div class="bar">
+        <i class="dot"></i>
+        <span class="brand">NULLNODE</span>
+        <span class="id">NODE-01 // PRIVATE</span>
+      </div>
+
+      <div class="body">
+        <ul class="log" aria-hidden="true">
+          <li>&gt; liaison chiffrée .......... <b>OK</b></li>
+          <li>&gt; nœud d'inférence ......... <b>PRIVÉ</b></li>
+          <li>&gt; télémétrie externe ....... <b>AUCUNE</b></li>
+          <li>&gt; identification ........... <span class="warn">REQUISE</span></li>
+        </ul>
+
+        <div class="gate">
+          <!--ERROR-->
+          <label for="password">Clé d'accès</label>
+          <div class="input">
+            <span>❯</span>
+            <input id="password" name="password" type="password"
+                   autocomplete="current-password" autofocus required
+                   placeholder="••••••••••">
+          </div>
+          <input type="hidden" name="next" value="<!--NEXT-->">
+          <button type="submit">Déverrouiller ▸</button>
+        </div>
+      </div>
+    </form>
+    <p class="foot">ACCÈS RESTREINT · TOUTE TENTATIVE EST JOURNALISÉE</p>
+  </div>
 </body>
 </html>

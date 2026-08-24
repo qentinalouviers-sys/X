@@ -38,12 +38,12 @@ export async function checkHealth(signal) {
     res = await fetch('/api/health', { signal, cache: 'no-store' });
   } catch (err) {
     if (err.name === 'AbortError') throw err;
-    return { state: STATE.OFFLINE, detail: 'serveur injoignable' };
+    return { state: STATE.OFFLINE, detail: 'liaison coupée' };
   }
   requireSession(res);
   if (res.ok) return { state: STATE.ONLINE, detail: 'prêt' };
   if (res.status === 503) return { state: STATE.LOADING, detail: 'chargement du modèle…' };
-  if (res.status === 502) return { state: STATE.OFFLINE, detail: 'llama-server hors ligne' };
+  if (res.status === 502) return { state: STATE.OFFLINE, detail: 'processus llama-server absent' };
   return { state: STATE.OFFLINE, detail: `HTTP ${res.status}` };
 }
 

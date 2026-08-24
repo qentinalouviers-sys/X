@@ -1,44 +1,284 @@
 @import "tailwindcss";
-@import "highlight.js/styles/github-dark.css";
 
-:root {
-  color-scheme: dark;
+/* ═══════════════════════════════════════════════════════════════════════
+   NULLNODE // terminal theme
+   Phosphor-on-black. Mono everywhere. Every colour is a token so the whole
+   palette can be shifted from here.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  --color-void: #04070a;
+  --color-pit: #070b10;
+  --color-panel: #0a1017;
+  --color-raise: #0e1620;
+  --color-line: #17242f;
+  --color-fg: #b9cec6;
+  --color-dim: #63796f;
+  --color-faint: #35473f;
+  --color-acc: #22e07a;
+  --color-acc2: #2ad4ff;
+  --color-warn: #ffb340;
+  --color-danger: #ff3b58;
+
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono",
+    "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-html, body, #root {
-  height: 100%;
-}
+:root { color-scheme: dark; }
+
+html, body, #root { height: 100%; }
 
 body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
+  margin: 0;
+  background-color: var(--color-void);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  /* Faint engineering grid, barely there. */
+  background-image:
+    linear-gradient(rgba(34, 224, 122, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34, 224, 122, 0.022) 1px, transparent 1px);
+  background-size: 34px 34px;
 }
 
-/* highlight.js ships its own <pre> background; we style the wrapper instead */
-.hljs {
-  background: transparent !important;
-  padding: 0 !important;
+::selection { background: rgba(34, 224, 122, 0.25); color: #e6fff2; }
+
+/* ── CRT overlay ─────────────────────────────────────────────────────────
+   Scanlines + vignette, drawn above everything, click-through. Disabled by
+   the FX toggle and by prefers-reduced-motion sufferers via .fx-off.        */
+.crt {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0) 0px,
+      rgba(0, 0, 0, 0) 2px,
+      rgba(0, 0, 0, 0.22) 3px,
+      rgba(0, 0, 0, 0.22) 4px
+    ),
+    radial-gradient(ellipse at center, transparent 52%, rgba(0, 0, 0, 0.62) 100%);
+  mix-blend-mode: multiply;
+  animation: flicker 5.5s infinite steps(1);
+}
+.fx-off .crt { display: none; }
+
+@keyframes flicker {
+  0%, 96%, 100% { opacity: 1; }
+  97% { opacity: 0.86; }
+  98% { opacity: 1; }
+  99% { opacity: 0.92; }
 }
 
-.markdown-body {
-  @apply text-[15px] leading-relaxed break-words;
+.glow { text-shadow: 0 0 10px currentColor; }
+.fx-off .glow { text-shadow: none; }
+
+/* ── structure ───────────────────────────────────────────────────────── */
+
+.panel {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
 }
-.markdown-body > * + * { @apply mt-3; }
-.markdown-body h1 { @apply text-xl font-semibold mt-5; }
-.markdown-body h2 { @apply text-lg font-semibold mt-5; }
-.markdown-body h3 { @apply text-base font-semibold mt-4; }
-.markdown-body ul { @apply list-disc pl-5 space-y-1; }
-.markdown-body ol { @apply list-decimal pl-5 space-y-1; }
-.markdown-body a { @apply text-sky-400 underline underline-offset-2; }
-.markdown-body blockquote { @apply border-l-2 border-neutral-700 pl-3 text-neutral-400; }
-.markdown-body table { @apply block w-full overflow-x-auto text-sm border-collapse; }
-.markdown-body th, .markdown-body td { @apply border border-neutral-800 px-2 py-1 text-left; }
+
+/* L-shaped corner brackets, the cheap way to make anything look targeted. */
+.frame { position: relative; }
+.frame::before,
+.frame::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-color: var(--color-acc);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.frame::before { top: -1px; left: -1px; border-top: 1px solid; border-left: 1px solid; }
+.frame::after { bottom: -1px; right: -1px; border-bottom: 1px solid; border-right: 1px solid; }
+
+.label {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-dim);
+}
+
+.readout { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+/* Aide et prose courte: même discrétion que .label mais lisible en casse
+   normale. Une classe séparée plutôt qu'un `normal-case` qui ne gagnerait
+   pas contre .label à spécificité égale. */
+.hint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--color-faint);
+}
+
+.rule {
+  height: 1px;
+  background: repeating-linear-gradient(
+    90deg, var(--color-line) 0 4px, transparent 4px 8px
+  );
+}
+
+/* ── controls ────────────────────────────────────────────────────────── */
+
+.btn {
+  border: 1px solid var(--color-line);
+  background: var(--color-raise);
+  color: var(--color-fg);
+  padding: 0.45rem 0.8rem;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--color-acc);
+  color: var(--color-acc);
+  background: rgba(34, 224, 122, 0.06);
+}
+.btn:disabled { opacity: 0.32; cursor: not-allowed; }
+
+.btn-primary {
+  border-color: rgba(34, 224, 122, 0.45);
+  color: var(--color-acc);
+  background: rgba(34, 224, 122, 0.08);
+}
+.btn-primary:hover:not(:disabled) { background: rgba(34, 224, 122, 0.16); }
+
+/* Modificateur explicite: `border-transparent` de Tailwind perdrait contre
+   le raccourci `border` de .btn à spécificité égale. */
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  padding: 0.3rem 0.45rem;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.btn-ghost:hover:not(:disabled) { background: transparent; border-color: transparent; }
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+  background: rgba(255, 59, 88, 0.08);
+}
+
+.field {
+  background: var(--color-void);
+  border: 1px solid var(--color-line);
+  color: var(--color-fg);
+  font-family: var(--font-mono);
+  outline: none;
+}
+.field:focus { border-color: rgba(34, 224, 122, 0.55); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 2px;
+  background: var(--color-line);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  background: var(--color-acc);
+  border-radius: 0;
+  cursor: pointer;
+}
+input[type="range"]::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  background: var(--color-acc);
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+/* ── cursor / spinner ────────────────────────────────────────────────── */
+
+.caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  background: var(--color-acc);
+  vertical-align: text-bottom;
+  animation: blink 1.05s steps(1) infinite;
+}
+@keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+.fx-off .caret { animation: none; }
+
+/* ── markdown ────────────────────────────────────────────────────────── */
+
+.markdown-body { font-size: 14px; line-height: 1.72; word-break: break-word; }
+.markdown-body > * + * { margin-top: 0.85rem; }
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  color: var(--color-acc);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-top: 1.3rem;
+}
+.markdown-body h1 { font-size: 15px; }
+.markdown-body h2 { font-size: 14px; }
+.markdown-body h3 { font-size: 13px; }
+.markdown-body ul { list-style: none; padding-left: 1.1rem; }
+.markdown-body ul > li::before {
+  content: "▸";
+  color: var(--color-acc);
+  margin-left: -1.1rem;
+  margin-right: 0.5rem;
+}
+.markdown-body ol { list-style: decimal; padding-left: 1.4rem; }
+.markdown-body li + li { margin-top: 0.28rem; }
+.markdown-body a { color: var(--color-acc2); text-decoration: underline; text-underline-offset: 3px; }
+.markdown-body blockquote {
+  border-left: 2px solid var(--color-acc);
+  padding-left: 0.8rem;
+  color: var(--color-dim);
+}
+.markdown-body table { display: block; width: 100%; overflow-x: auto; font-size: 12.5px; border-collapse: collapse; }
+.markdown-body th,
+.markdown-body td { border: 1px solid var(--color-line); padding: 0.3rem 0.55rem; text-align: left; }
+.markdown-body th { color: var(--color-acc); text-transform: uppercase; font-size: 10px; letter-spacing: 0.1em; }
 .markdown-body :not(pre) > code {
-  @apply rounded bg-neutral-800 px-1.5 py-0.5 text-[0.85em] text-amber-200;
+  background: rgba(34, 224, 122, 0.08);
+  border: 1px solid rgba(34, 224, 122, 0.18);
+  padding: 0.05rem 0.32rem;
+  font-size: 0.88em;
+  color: var(--color-acc);
 }
-.markdown-body hr { @apply border-neutral-800; }
+.markdown-body hr { border: 0; border-top: 1px dashed var(--color-line); }
 
+.hljs { background: transparent !important; padding: 0 !important; color: var(--color-fg); }
+/* Hand-rolled highlight palette: staying in-theme beats importing 40 kB of
+   someone else's colours, and code still needs to be readable. */
+.hljs-comment, .hljs-quote { color: var(--color-faint); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-type { color: var(--color-acc2); }
+.hljs-string, .hljs-regexp, .hljs-addition { color: var(--color-acc); }
+.hljs-number, .hljs-symbol, .hljs-bullet { color: var(--color-warn); }
+.hljs-title, .hljs-name, .hljs-section, .hljs-title.function_ { color: #e2f5ea; font-weight: 600; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable { color: #8fd8c4; }
+.hljs-built_in, .hljs-class .hljs-title { color: var(--color-acc2); }
+.hljs-meta, .hljs-doctag { color: var(--color-dim); }
+.hljs-deletion { color: var(--color-danger); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
 
-.scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { @apply rounded bg-neutral-700; }
+/* ── scrollbars ──────────────────────────────────────────────────────── */
+
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 9px; height: 9px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-line); }
+.scrollbar-thin::-webkit-scrollbar-thumb:hover { background: var(--color-faint); }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}

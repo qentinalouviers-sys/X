@@ -195,11 +195,10 @@ async function serveStatic(req, res) {
   }
 
   const ext = path.extname(filePath).toLowerCase();
-  const immutable = urlPath.startsWith('/assets/');
   res.writeHead(200, {
     'content-type': MIME[ext] || 'application/octet-stream',
     'content-length': stat.size,
-    'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'no-store',
+    'cache-control': cachePolicy(urlPath),
   });
   if (req.method === 'HEAD') return res.end();
   fs.createReadStream(filePath).on('error', () => res.destroy()).pipe(res);
@@ -290,6 +289,13 @@ function isAuthenticated(req) {
 
 /* ---------------------------------------------------------------- helpers */
 
+/** Hashed bundles never change; icons rarely; the shell and the SW never cache. */
+function cachePolicy(urlPath) {
+  if (urlPath.startsWith('/assets/')) return 'public, max-age=31536000, immutable';
+  if (urlPath.startsWith('/icons/')) return 'public, max-age=86400';
+  return 'no-store';
+}
+
 function send(res, code, body) {
   res.writeHead(code, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' });
   res.end(body);
@@ -317,6 +323,17 @@ const server = http.createServer((req, res) => {
   if (pathname === '/robots.txt') {
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
     return res.end('User-agent: *\nDisallow: /\n');
+  }
+
+  // The manifest and icons carry nothing sensitive, and serving them to an
+  // anonymous visitor is what makes the login screen itself installable.
+  const isPublicAsset =
+    pathname === '/manifest.webmanifest' ||
+    pathname.startsWith('/icons/') ||
+    pathname === '/favicon.ico';
+
+  if (isPublicAsset && (req.method === 'GET' || req.method === 'HEAD')) {
+    return serveStatic(req, res).catch((err) => send(res, 500, String(err)));
   }
 
   if (pathname.startsWith('/auth/')) {

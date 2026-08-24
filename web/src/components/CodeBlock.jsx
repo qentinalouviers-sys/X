@@ -17,6 +17,7 @@ export default function CodeBlock({ children }) {
   const [copied, setCopied] = useState(false);
   const timer = useRef(null);
   const lang = languageOf(children);
+  const lines = textOf(children).replace(/\n$/, '').split('\n').length;
 
   const copy = useCallback(async () => {
     const text = textOf(children);
@@ -44,18 +45,16 @@ export default function CodeBlock({ children }) {
   }, [children]);
 
   return (
-    <div className="group relative my-3 overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900">
-      <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-1.5">
-        <span className="font-mono text-[11px] uppercase tracking-wide text-neutral-500">{lang || 'code'}</span>
-        <button
-          type="button"
-          onClick={copy}
-          className="rounded px-2 py-1 text-[11px] text-neutral-400 transition hover:bg-neutral-800 hover:text-neutral-100"
-        >
-          {copied ? 'Copié ✓' : 'Copier'}
+    <div className="frame my-3 border border-line bg-void">
+      <div className="flex items-center justify-between border-b border-line bg-panel px-2 py-1">
+        <span className="label readout text-acc">
+          ▤ {lang ? lang.toUpperCase() : 'RAW'} <span className="text-faint">· {lines}L</span>
+        </span>
+        <button type="button" onClick={copy} className="label hover:text-acc">
+          {copied ? '[ COPIÉ ✓ ]' : '[ COPIER ]'}
         </button>
       </div>
-      <pre className="scrollbar-thin overflow-x-auto p-3 text-[13px] leading-relaxed">{children}</pre>
+      <pre className="scrollbar-thin overflow-x-auto p-3 text-[12.5px] leading-[1.65]">{children}</pre>
     </div>
   );
 }

@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { STATE } from '../lib/api.js';
 
-function fmt(ms) {
-  const s = ms / 1000;
-  return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, '0')} s`;
+const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function clock(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-export default function Composer({ text, onTextChange, onSend, onStop, isStreaming, waitingForModel, liveStats, usage, status }) {
+export default function Composer({
+  text, onTextChange, onSend, onStop, isStreaming, waitingForModel, liveStats, usage, status,
+}) {
   const [overflowAck, setOverflowAck] = useState(false);
   const ref = useRef(null);
 
@@ -38,62 +42,73 @@ export default function Composer({ text, onTextChange, onSend, onStop, isStreami
     }
   };
 
+  const frame = liveStats ? SPIN[Math.floor(liveStats.elapsed / 90) % SPIN.length] : SPIN[0];
+
   return (
-    <div className="shrink-0 border-t border-neutral-800 bg-neutral-950 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2">
-      <div className="mx-auto w-full max-w-3xl space-y-2">
+    <div className="shrink-0 border-t border-line bg-pit px-2 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-2 sm:px-3">
+      <div className="mx-auto w-full max-w-3xl space-y-1.5">
         {isStreaming && (
-          <div className="flex items-center gap-3 rounded-lg bg-neutral-900 px-3 py-2 text-[12px]">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-sky-400" />
+          <div className="frame flex items-center gap-3 border border-acc/30 bg-acc/[0.04] px-2 py-1.5">
+            <span className="text-acc glow">{frame}</span>
             {waitingForModel ? (
-              <span className="text-amber-300">Modèle en cours de chargement, nouvelle tentative automatique…</span>
+              <span className="label text-warn">
+                MODÈLE EN CHARGEMENT · NOUVELLE TENTATIVE AUTOMATIQUE
+              </span>
             ) : (
-              <span className="font-mono text-neutral-400">
-                {liveStats?.tokens ?? 0} tok · {(liveStats?.tps ?? 0).toFixed(1)} tok/s · {fmt(liveStats?.elapsed ?? 0)}
+              <span className="label readout text-acc">
+                {String(liveStats?.tokens ?? 0).padStart(4, '0')} TOK
+                <span className="text-faint"> · </span>
+                {(liveStats?.tps ?? 0).toFixed(1)} T/S
+                <span className="text-faint"> · </span>
+                {clock(liveStats?.elapsed ?? 0)}
               </span>
             )}
-            <button onClick={onStop} className="ml-auto rounded bg-neutral-800 px-3 py-1 font-medium text-red-300 hover:bg-neutral-700">
-              Stop
+            <button onClick={onStop} className="btn btn-danger ml-auto py-1">
+              ■ KILL
             </button>
           </div>
         )}
 
         {wouldOverflow && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200 ring-1 ring-amber-500/30">
-            <span>
-              ~{usage.prompt} tokens de prompt + {usage.reserved} réservés &gt; {usage.total}. Le serveur tronquera
-              silencieusement le début de la conversation.
+          <div className="flex flex-wrap items-center gap-2 border border-warn/40 bg-warn/[0.06] px-2 py-1.5">
+            <span className="label leading-relaxed text-warn">
+              ⚠ DÉBORDEMENT : ~{usage.prompt} TOK DE PROMPT + {usage.reserved} RÉSERVÉS &gt; {usage.total}.
+              LE SERVEUR TRONQUERA SILENCIEUSEMENT LE DÉBUT DE LA SESSION.
             </span>
             {!overflowAck && (
-              <button onClick={() => setOverflowAck(true)} className="ml-auto rounded bg-amber-500/20 px-2 py-1 font-medium hover:bg-amber-500/30">
-                Envoyer quand même
+              <button onClick={() => setOverflowAck(true)} className="btn ml-auto border-warn/40 text-warn">
+                FORCER
               </button>
             )}
           </div>
         )}
 
         {offline && (
-          <div className="rounded-lg bg-red-500/10 px-3 py-2 text-[12px] text-red-200 ring-1 ring-red-500/30">
-            llama-server injoignable ({status.detail}). Vérifiez le LaunchAgent sur le Mac.
+          <div className="border border-danger/40 bg-danger/[0.06] px-2 py-1.5">
+            <span className="label text-danger">
+              ✕ NŒUD INJOIGNABLE · {status.detail.toUpperCase()}
+            </span>
           </div>
         )}
 
-        <div className="flex items-end gap-2 rounded-2xl border border-neutral-800 bg-neutral-900 p-2 focus-within:border-neutral-700">
+        <div className="frame flex items-end gap-2 border border-line bg-panel px-2 py-1.5 focus-within:border-acc/50">
+          <span className="pb-1.5 text-acc glow select-none">❯</span>
           <textarea
             ref={ref}
             rows={1}
             value={text}
             onChange={(e) => onTextChange(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder={isStreaming ? 'Génération en cours…' : 'Message…'}
-            className="scrollbar-thin max-h-[200px] flex-1 resize-none bg-transparent px-2 py-1.5 text-[16px] outline-none placeholder:text-neutral-600"
+            placeholder={isStreaming ? 'CANAL OCCUPÉ…' : 'saisir la requête…'}
+            className="scrollbar-thin max-h-[200px] flex-1 resize-none bg-transparent py-1 text-[16px] text-fg outline-none placeholder:text-faint sm:text-[13.5px]"
           />
           <button
             onClick={submit}
             disabled={!canSend}
-            title={isStreaming ? 'Une seule génération à la fois (--parallel 1)' : 'Envoyer'}
-            className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition enabled:hover:bg-sky-500 disabled:cursor-not-allowed disabled:opacity-30"
+            title={isStreaming ? 'Canal saturé : --parallel 1' : 'Transmettre'}
+            className="btn btn-primary shrink-0 py-1.5"
           >
-            {isStreaming ? '…' : '↑'}
+            {isStreaming ? '···' : 'EXEC ▸'}
           </button>
         </div>
       </div>

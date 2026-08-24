@@ -1,15 +1,43 @@
 <!doctype html>
-<html lang="fr" class="dark">
+<html lang="fr">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#04070a" />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <title>NULLNODE // Terminal</title>
+
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="NULLNODE" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>LLM Chat</title>
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <style>
+      /* Shown until React mounts; the bundle is ~160 kB gzip, so this is brief
+         on the LAN but not on a cold 4G start. */
+      html, body { height: 100%; margin: 0; background: #04070a; }
+      #boot {
+        height: 100%;
+        display: grid;
+        place-items: center;
+        color: #22e07a;
+        font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: 0.18em;
+      }
+      #boot span { animation: bootblink 1s steps(1) infinite; }
+      @keyframes bootblink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0.25 } }
+      @media (prefers-reduced-motion: reduce) { #boot span { animation: none } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="boot">INITIALISATION<span>_</span></div></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

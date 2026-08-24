@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar.jsx';
 import StatusBar from './components/StatusBar.jsx';
 import { useChat } from './hooks/useChat.js';
 import { useConversations } from './hooks/useConversations.js';
+import { useFx, usePwa } from './hooks/usePwa.js';
 import { useServerStatus } from './hooks/useServerStatus.js';
 import { contextUsage } from './lib/tokens.js';
 
@@ -21,6 +22,8 @@ export default function App() {
   } = useConversations();
 
   const { status, model, refresh } = useServerStatus();
+  const { installable, install } = usePwa();
+  const [fx, toggleFx] = useFx();
 
   const chat = useChat({
     conversation: current,
@@ -45,6 +48,8 @@ export default function App() {
 
   return (
     <div className="flex h-full">
+      <div className="crt" aria-hidden="true" />
+
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -53,6 +58,10 @@ export default function App() {
         onSelect={selectConversation}
         onCreate={createConversation}
         onDelete={deleteConversation}
+        fx={fx}
+        onToggleFx={toggleFx}
+        installable={installable}
+        onInstall={install}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">

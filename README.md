@@ -1,6 +1,7 @@
 # llm-chat
 
-Interface de chat pour un `llama-server` local, exposable sur le LAN ou derrière un reverse proxy.
+**NULLNODE** — terminal de chat pour un `llama-server` auto-hébergé.
+PWA installable, thème phosphore, exposable sur le LAN ou derrière un reverse proxy.
 React + Vite en front, un proxy Node sans dépendance en back.
 
 Pensée autour de la contrainte réelle du poste : **~5,8 tok/s en génération**.
@@ -11,8 +12,9 @@ existe parce qu'une réponse de 1000 tokens prend trois minutes.
 server.js                       proxy + statique + auth, 0 dépendance
 lib/auth.js                     mot de passe, sessions signées, anti brute-force
 lib/security.js                 CSP et en-têtes de sécurité
-lib/login.html                  page de connexion (formulaire HTML pur)
+lib/login.html                  écran de connexion (HTML + CSS purs, sans JS)
 web/                            front Vite + React + Tailwind -> web/dist
+web/public/                     manifest PWA, service worker, icônes
 deploy/                         systemd (VPS), launchd (Mac), nginx, Caddy
 ```
 
@@ -133,6 +135,45 @@ du shell.
 Décharger : `launchctl unload ~/Library/LaunchAgents/com.yohan.llmchat.plist`.
 
 
+
+## Interface
+
+Thème terminal : fond quasi noir, phosphore vert, monospace de bout en bout,
+scanlines CRT et vignette. Aucune police n'est téléchargée — la pile mono
+système est utilisée telle quelle, donc rien à charger et rien à fuiter.
+
+Les effets (scanlines, halo, clignotements) se coupent depuis la barre
+latérale — bouton `FX [ON/OFF]`, mémorisé par appareil. Ils sont désactivés
+d'office pour qui a réglé `prefers-reduced-motion`. Sur mobile le halo et les
+scanlines fatiguent vite : le bouton n'est pas décoratif.
+
+Repères de lecture : `OPERATOR` pour vos messages, `NODE` pour le modèle,
+`◈ STREAM` pendant la génération, `TRONQUÉ · MAX_TOKENS` sur une réponse
+coupée, `SIGKILL OPÉRATEUR` sur un arrêt manuel.
+
+## PWA
+
+L'app s'installe et se lance en plein écran, sans barre d'URL.
+
+- **Android / Chrome** : bouton `⤋ INSTALLER L'APP` dans la barre latérale
+  (il n'apparaît que quand le navigateur propose l'installation).
+- **iOS / Safari** : Safari n'expose pas d'API d'installation — passer par
+  Partager → « Sur l'écran d'accueil ». L'icône et le nom viennent du manifest.
+
+Le service worker ne met en cache **que la coquille statique** : `/`, les
+bundles hachés de `/assets/`, les icônes et le manifest. `/api/` et `/auth/`
+en sont exclus par une règle explicite — mettre une réponse du modèle ou une
+redirection de login dans le cache du navigateur serait à la fois inutile et
+une fuite. Vérifié : après usage, le cache ne contient que trois entrées et
+aucune ne commence par `/api`.
+
+Hors ligne, la coquille se charge et les conversations restent lisibles depuis
+le `localStorage` ; l'état bascule sur `LINK::DOWN` et l'envoi est bloqué.
+
+Les navigations passent toujours par le réseau en premier, sinon une session
+expirée servirait la coquille en cache au lieu de la redirection vers l'écran
+de connexion.
+
 ## Sécurité
 
 Le service est conçu pour être joignable depuis Internet derrière un reverse
@@ -140,6 +181,8 @@ proxy TLS. Ce qui est en place :
 
 - **Authentification par mot de passe** sur *toutes* les routes, y compris les
   fichiers statiques : sans session, on ne peut même pas télécharger le bundle.
+  Seuls le manifest et les icônes restent publics, pour que l'écran de
+  connexion s'affiche et reste installable.
   Session = cookie signé HMAC-SHA256, `HttpOnly`, `SameSite=Strict`, `Secure`
   dès que la requête d'origine est en HTTPS, valable 30 jours.
 - **Anti brute-force** : 5 essais ratés puis blocage exponentiel par IP
@@ -147,7 +190,7 @@ proxy TLS. Ce qui est en place :
   sinon toutes les tentatives sont comptées sur l'IP du proxy et vous vous
   bloquez vous-même.
 - **CSP stricte** : `default-src 'self'`, `connect-src 'self'`,
-  `img-src 'self' data:`, `frame-ancestors 'none'`. C'est cette directive qui
+  `img-src 'self' data:`, `worker-src 'self'`, `frame-ancestors 'none'`. C'est cette directive qui
   garantit techniquement que le contenu de vos conversations ne peut pas
   quitter le site : une réponse du modèle contenant
   `![](https://ailleurs/?fuite=...)` est bloquée par le navigateur. Vérifié :
@@ -282,3 +325,8 @@ Marche bien en pratique, mais le modèle peut répéter une phrase à la jointur
 - Les sessions ne sont pas révocables individuellement : pour déconnecter tous
   les appareils, supprimez `~/.llm-chat-session-secret` et redémarrez.
 - Le blocage anti brute-force est en mémoire : un redémarrage le remet à zéro.
+- `lib/login.html` est lu une seule fois au démarrage : redémarrez le service
+  après l'avoir modifié.
+- Le bundle pèse ~160 kB gzip, dominé par `highlight.js` et `react-markdown`.
+  Invisible sur le LAN, moins sur un premier chargement en 4G — le service
+  worker règle le problème dès la deuxième visite.
