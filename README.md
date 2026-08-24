@@ -13,13 +13,28 @@ lib/auth.js                     mot de passe, sessions signées, anti brute-forc
 lib/security.js                 CSP et en-têtes de sécurité
 lib/login.html                  page de connexion (formulaire HTML pur)
 web/                            front Vite + React + Tailwind -> web/dist
-launchd/com.yohan.llmchat.plist LaunchAgent prêt à l'emploi
+deploy/                         systemd (VPS), launchd (Mac), nginx, Caddy
 ```
+
+## Architecture déployée
+
+```
+navigateur ──TLS──> VPS hermes-vps ──Tailscale/WireGuard──> MacBook
+                    nginx :443                              llama-server :8080
+                    server.js :3000 (loopback)              modèle qwen38-abl
+                    100.121.56.75                           100.96.144.95
+```
+
+Le proxy Node tourne **sur le VPS**, pas sur le Mac : `LLM_UPSTREAM` pointe
+donc sur l'IP Tailscale du Mac, et aucun port du MacBook n'est exposé
+publiquement. Le `.plist` launchd n'est utile que si vous faites tourner
+`server.js` directement sur le Mac (déploiement LAN).
 
 ## Prérequis
 
 - Node ≥ 20 sur le Mac (`brew install node`)
-- `llama-server` qui écoute déjà sur `127.0.0.1:8080`
+- `llama-server` joignable depuis la machine qui fait tourner `server.js`
+  (`127.0.0.1:8080` en local, `100.96.144.95:8080` depuis le VPS via Tailscale)
 - La clé API dans `~/.qwen38-api-key`
 - Un mot de passe d'accès dans `~/.llm-chat-password` (le serveur refuse de
   démarrer sans, sauf `AUTH_DISABLED=1`)
@@ -47,9 +62,9 @@ export APP_PASSWORD_HASH='scrypt$...$...'
 |--------------------|-------------------------|------|
 | `LLM_API_KEY`      | —                       | Clé envoyée en `Authorization: Bearer`. Prioritaire. |
 | `LLM_API_KEY_FILE` | `~/.qwen38-api-key`     | Fichier lu si `LLM_API_KEY` est absente. |
-| `LLM_UPSTREAM`     | `http://127.0.0.1:8080` | llama-server. |
+| `LLM_UPSTREAM`     | `http://127.0.0.1:8080` | llama-server. Sur le VPS : `http://100.96.144.95:8080`. |
 | `PORT`             | `3000`                  | |
-| `HOST`             | `0.0.0.0`               | Mettre `127.0.0.1` pour couper l'accès LAN. |
+| `HOST`             | `0.0.0.0`               | **`127.0.0.1` derrière un reverse proxy** : le port ne doit pas être joignable directement. |
 | `WEB_DIR`          | `web/dist`              | Build servi. |
 | `APP_PASSWORD`     | —                       | Mot de passe d'accès en clair. |
 | `APP_PASSWORD_HASH`| —                       | Empreinte scrypt (`npm run hash-password`). Prioritaire. |
@@ -76,11 +91,36 @@ Ouvrir `http://localhost:5173`.
 
 Build de prod : `npm run build` (sortie `web/dist`), puis `npm start`.
 
-## Démarrage automatique (LaunchAgent)
+## Déploiement sur le VPS
 
 ```bash
-sed -i '' "s|/Users/yohan|$HOME|g" launchd/com.yohan.llmchat.plist
-cp launchd/com.yohan.llmchat.plist ~/Library/LaunchAgents/
+sudo useradd -r -s /usr/sbin/nologin llmchat
+sudo mkdir -p /opt/llm-chat /etc/llm-chat /var/lib/llm-chat
+sudo chown llmchat: /var/lib/llm-chat
+
+git clone <ce-repo> /opt/llm-chat && cd /opt/llm-chat
+npm run setup                                    # build du front
+
+printf '%s' 'CLE-LLAMA'      | sudo tee /etc/llm-chat/api-key  > /dev/null
+printf '%s' 'MOT-DE-PASSE'   | sudo tee /etc/llm-chat/password > /dev/null
+sudo chmod 600 /etc/llm-chat/* && sudo chown llmchat: /etc/llm-chat/*
+
+sudo cp deploy/llm-chat.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now llm-chat
+sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/x.eviatek.fr
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Deux réglages du reverse proxy sont critiques et cassent le streaming s'ils
+sont oubliés : `proxy_buffering off` (sinon nginx accumule le flux SSE et
+l'app reste figée) et `proxy_read_timeout 900s` (le défaut de 60 s coupe la
+connexion pendant le traitement d'un prompt long, *avant* le premier token).
+
+## Démarrage automatique sur le Mac (LaunchAgent, déploiement LAN)
+
+```bash
+sed -i '' "s|/Users/yohan|$HOME|g" deploy/com.yohan.llmchat.plist
+cp deploy/com.yohan.llmchat.plist ~/Library/LaunchAgents/
 launchctl load  ~/Library/LaunchAgents/com.yohan.llmchat.plist
 launchctl list | grep llmchat
 tail -f ~/Library/Logs/llm-chat.log
@@ -122,10 +162,25 @@ proxy TLS. Ce qui est en place :
 
 ### Ce qui n'est *pas* couvert
 
-- **Le chiffrement TLS est terminé par votre reverse proxy**, pas par ce
-  service. Si c'est un tunnel géré (Cloudflare Tunnel, ngrok…), l'opérateur
-  voit vos prompts en clair à cet endroit. Seul un proxy que vous hébergez
-  vous-même évite ce tiers.
+- **Le TLS est terminé par nginx sur le VPS**, pas par ce service. Vos prompts
+  existent en clair dans la mémoire du VPS le temps du transit. Aucun tiers
+  type Cloudflare n'est dans la boucle, mais l'hébergeur du VPS a un accès
+  hyperviseur à cette machine. C'est le seul tiers du montage.
+- **Le saut VPS → Mac est chiffré par Tailscale (WireGuard)**, sans port public
+  sur le MacBook. En revanche `llama-server` écoute sur `0.0.0.0:8080` : il est
+  donc aussi joignable depuis votre réseau Wi-Fi domestique, protégé
+  uniquement par la clé Bearer. Restreignez-le par une ACL Tailscale ou en le
+  liant à l'IP `100.96.144.95`. Exemple d'ACL Tailscale, qui limite l'accès au
+  port 8080 au seul VPS :
+
+  ```json
+  {
+    "acls": [
+      { "action": "accept", "src": ["hermes-vps"], "dst": ["macbook:8080"] },
+      { "action": "accept", "src": ["autologin"],  "dst": ["*:*"] }
+    ]
+  }
+  ```
 - **Les conversations sont stockées en clair dans le `localStorage`** du
   navigateur. Elles ne transitent nulle part, mais quiconque a accès au
   navigateur déverrouillé les lit.
@@ -136,20 +191,28 @@ proxy TLS. Ce qui est en place :
 
 ### Vérifications à faire depuis l'extérieur
 
+Depuis une machine extérieure au tailnet (4G du téléphone, par exemple) :
+
 ```bash
 # 1. TLS valide et redirection depuis http://
 curl -sSI https://x.eviatek.fr/ | head -1
 curl -sS -o /dev/null -w '%{http_code} -> %{redirect_url}\n' http://x.eviatek.fr/
 
-# 2. Rien n'est accessible sans session (doit répondre 302 puis 401)
+# 2. Rien n'est accessible sans session (302 puis 401)
 curl -s -o /dev/null -w '%{http_code}\n' https://x.eviatek.fr/
 curl -s -o /dev/null -w '%{http_code}\n' https://x.eviatek.fr/api/health
 
-# 3. llama-server ne doit PAS répondre depuis l'extérieur
-curl -sS --max-time 5 http://x.eviatek.fr:8080/health     # doit échouer
-curl -sS --max-time 5 https://x.eviatek.fr:8080/health    # doit échouer
+# 3. LE PLUS IMPORTANT: le port 3000 du VPS ne doit PAS répondre.
+#    S'il répond, on atteint l'app en clair, sans TLS, et TRUST_PROXY=1
+#    permet alors d'usurper X-Forwarded-For pour contourner l'anti brute-force.
+curl -sS --max-time 5 http://100.121.56.75:3000/     # remplacer par l'IP PUBLIQUE du VPS
+sudo ss -lntp | grep 3000                            # sur le VPS: doit afficher 127.0.0.1:3000
 
-# 4. Note de sécurité TLS
+# 4. Le Mac ne doit rien exposer publiquement
+sudo lsof -nP -iTCP:8080 -sTCP:LISTEN                # sur le Mac
+#    et depuis l'extérieur du tailnet, aucune de ces adresses ne doit répondre.
+
+# 5. Note TLS
 #    https://www.ssllabs.com/ssltest/analyze.html?d=x.eviatek.fr
 ```
 

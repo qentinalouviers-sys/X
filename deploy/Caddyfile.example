@@ -1,0 +1,17 @@
+# Équivalent Caddy. TLS automatique, X-Forwarded-Proto/For posés d'office.
+#
+# Ne pas activer `encode gzip` globalement: la compression bufferise le flux
+# SSE et annule le streaming token par token.
+
+x.eviatek.fr {
+	reverse_proxy 127.0.0.1:3000 {
+		# -1 = vider le tampon à chaque écriture, obligatoire pour le SSE.
+		flush_interval -1
+
+		transport http {
+			# Le premier token peut se faire attendre plusieurs minutes.
+			read_timeout 0
+			write_timeout 0
+		}
+	}
+}

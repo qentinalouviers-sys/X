@@ -1,0 +1,50 @@
+# Reverse proxy TLS sur le VPS.
+#
+# Les deux réglages critiques sont `proxy_buffering off` et les timeouts.
+# Par défaut nginx met proxy_read_timeout à 60 s: sur un prompt long, le
+# traitement (15-25 tok/s) peut rester silencieux plusieurs minutes AVANT le
+# premier token. nginx couperait la connexion en plein milieu.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name x.eviatek.fr;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name x.eviatek.fr;
+
+    ssl_certificate     /etc/letsencrypt/live/x.eviatek.fr/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/x.eviatek.fr/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    # Taille d'un prompt de 8192 tokens, avec de la marge.
+    client_max_body_size 2m;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Streaming SSE: ne rien bufferiser, ne rien compresser.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_request_buffering off;
+        gzip off;
+
+        # Une réponse de 1000 tokens prend ~3 min, et l'attente avant le
+        # premier token peut dépasser 5 min sur un contexte plein.
+        proxy_read_timeout 900s;
+        proxy_send_timeout 900s;
+        send_timeout       900s;
+    }
+}

@@ -1,0 +1,53 @@
+# VPS (hermes-vps) : le proxy Node tourne ici, le modèle est sur le Mac,
+# joint par Tailscale. Le service n'écoute que sur la loopback : seul le
+# reverse proxy local peut l'atteindre.
+#
+#   sudo cp deploy/llm-chat.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now llm-chat
+#   journalctl -u llm-chat -f
+
+[Unit]
+Description=llm-chat (proxy + UI vers llama-server via Tailscale)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=llmchat
+WorkingDirectory=/opt/llm-chat
+ExecStart=/usr/bin/node /opt/llm-chat/server.js
+Restart=on-failure
+RestartSec=5
+
+# Écoute uniquement en local: nginx/Caddy fait face à Internet.
+# Indispensable pour que TRUST_PROXY=1 soit sûr, sinon n'importe qui peut
+# usurper X-Forwarded-For et contourner le blocage anti brute-force.
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=TRUST_PROXY=1
+
+# Le Mac, via le tunnel WireGuard de Tailscale.
+Environment=LLM_UPSTREAM=http://100.96.144.95:8080
+
+# Secrets: fichiers en 0600 appartenant à l'utilisateur du service.
+Environment=LLM_API_KEY_FILE=/etc/llm-chat/api-key
+Environment=APP_PASSWORD_FILE=/etc/llm-chat/password
+Environment=SESSION_SECRET_FILE=/var/lib/llm-chat/session-secret
+
+# Durcissement systemd
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/llm-chat
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
