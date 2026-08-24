@@ -7,7 +7,7 @@ set -euo pipefail
 APP_DIR=${APP_DIR:-/opt/llm-chat}
 VAR_DIR=${VAR_DIR:-/var/lib/llm-chat}
 SERVICE_USER=${SERVICE_USER:-llmchat}
-BRANCH=${BRANCH:-claude/local-llm-chat-app-u681zj}
+BRANCH=${BRANCH:-main}
 
 die() { echo "✕ $*" >&2; exit 1; }
 step() { echo; echo "▸ $*"; }

@@ -12,7 +12,7 @@ ETC_DIR=${ETC_DIR:-/etc/llm-chat}
 VAR_DIR=${VAR_DIR:-/var/lib/llm-chat}
 SERVICE_USER=${SERVICE_USER:-llmchat}
 REPO=${REPO:-https://github.com/qentinalouviers-sys/X}
-BRANCH=${BRANCH:-claude/local-llm-chat-app-u681zj}
+BRANCH=${BRANCH:-main}
 
 die() { echo "✕ $*" >&2; exit 1; }
 step() { echo; echo "▸ $*"; }

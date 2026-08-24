@@ -99,7 +99,7 @@ Build de prod : `npm run build` (sortie `web/dist`), puis `npm start`.
 Première installation :
 
 ```bash
-git clone -b claude/local-llm-chat-app-u681zj https://github.com/qentinalouviers-sys/X /tmp/nullnode
+git clone https://github.com/qentinalouviers-sys/X /tmp/nullnode
 sudo bash /tmp/nullnode/deploy/bootstrap.sh
 ```
 
@@ -124,8 +124,9 @@ Mises à jour :
 sudo bash /opt/llm-chat/deploy/update.sh
 ```
 
-`update.sh` récupère la branche, reconstruit, redémarre, vérifie — et **revient
-au commit précédent** si la vérification échoue.
+`update.sh` récupère `main`, reconstruit, redémarre, vérifie — et **revient au
+commit précédent** si la vérification échoue. Pour déployer une autre branche
+ponctuellement : `sudo BRANCH=ma-branche bash /opt/llm-chat/deploy/update.sh`.
 
 Vérification seule, à tout moment :
 
