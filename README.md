@@ -15,7 +15,8 @@ lib/security.js                 CSP et en-têtes de sécurité
 lib/login.html                  écran de connexion (HTML + CSS purs, sans JS)
 web/                            front Vite + React + Tailwind -> web/dist
 web/public/                     manifest PWA, service worker, icônes
-deploy/                         systemd (VPS), launchd (Mac), nginx, Caddy
+deploy/                         scripts d'installation et de mise à jour,
+                                unité systemd, launchd, nginx, Caddy
 ```
 
 ## Architecture déployée
@@ -95,28 +96,58 @@ Build de prod : `npm run build` (sortie `web/dist`), puis `npm start`.
 
 ## Déploiement sur le VPS
 
+Première installation :
+
 ```bash
-sudo useradd -r -s /usr/sbin/nologin llmchat
-sudo mkdir -p /opt/llm-chat /etc/llm-chat /var/lib/llm-chat
-sudo chown llmchat: /var/lib/llm-chat
-
-git clone <ce-repo> /opt/llm-chat && cd /opt/llm-chat
-npm run setup                                    # build du front
-
-printf '%s' 'CLE-LLAMA'      | sudo tee /etc/llm-chat/api-key  > /dev/null
-printf '%s' 'MOT-DE-PASSE'   | sudo tee /etc/llm-chat/password > /dev/null
-sudo chmod 600 /etc/llm-chat/* && sudo chown llmchat: /etc/llm-chat/*
-
-sudo cp deploy/llm-chat.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now llm-chat
-sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/x.eviatek.fr
-sudo nginx -t && sudo systemctl reload nginx
+git clone -b claude/local-llm-chat-app-u681zj https://github.com/qentinalouviers-sys/X /tmp/nullnode
+sudo bash /tmp/nullnode/deploy/bootstrap.sh
 ```
 
-Deux réglages du reverse proxy sont critiques et cassent le streaming s'ils
-sont oubliés : `proxy_buffering off` (sinon nginx accumule le flux SSE et
-l'app reste figée) et `proxy_read_timeout 900s` (le défaut de 60 s coupe la
-connexion pendant le traitement d'un prompt long, *avant* le premier token).
+Le script crée l'utilisateur de service, les répertoires, demande les deux
+secrets (saisis à l'invite, jamais en argument — l'historique du shell les
+garderait), clone dans `/opt/llm-chat`, construit le front sous le compte de
+service, installe l'unité systemd et lance une vérification. Il est idempotent :
+relançable sans casse.
+
+Restent deux choses à faire une seule fois, à la main :
+
+```bash
+sudo cp /opt/llm-chat/deploy/nginx.conf.example /etc/nginx/sites-available/x.eviatek.fr
+sudo ln -s /etc/nginx/sites-available/x.eviatek.fr /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo ss -lntp | grep 3000      # doit afficher 127.0.0.1:3000, jamais 0.0.0.0
+```
+
+Mises à jour :
+
+```bash
+sudo bash /opt/llm-chat/deploy/update.sh
+```
+
+`update.sh` récupère la branche, reconstruit, redémarre, vérifie — et **revient
+au commit précédent** si la vérification échoue.
+
+Vérification seule, à tout moment :
+
+```bash
+sudo bash /opt/llm-chat/deploy/healthcheck.sh
+```
+
+Elle contrôle que l'app et l'API sont bien protégées, que l'écran de connexion
+répond, que la CSP est présente, et rapporte l'état du lien vers `llama-server`
+(prêt / en chargement / injoignable) sans bloquer dessus — après un reboot du
+Mac, 503 pendant deux minutes est normal.
+
+### Pièges de reverse proxy
+
+Deux réglages nginx cassent l'app s'ils sont oubliés, tous deux dans
+`deploy/nginx.conf.example` :
+
+- `proxy_buffering off` — sinon nginx accumule le flux SSE et l'interface reste
+  figée jusqu'à la fin de la génération.
+- `proxy_read_timeout 900s` — le défaut de 60 s coupe la connexion pendant le
+  traitement d'un prompt long, *avant* le premier token. Le symptôme trompe :
+  ça ne casse que sur les longues conversations.
 
 ## Démarrage automatique sur le Mac (LaunchAgent, déploiement LAN)
 
