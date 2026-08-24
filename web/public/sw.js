@@ -45,7 +45,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((res) => {
-          if (isCacheable(res)) {
+          // Seule la racine est la coquille. Sans ce test, une visite sur
+          // /admin remplacerait le chat par la page d'administration dans le
+          // cache, et c'est elle qui s'afficherait hors ligne.
+          if (url.pathname === '/' && isCacheable(res)) {
             const copy = res.clone();
             caches.open(SHELL).then((c) => c.put('/', copy));
           }

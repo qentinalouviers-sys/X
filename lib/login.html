@@ -107,6 +107,7 @@ button:hover{background:rgba(34,224,122,.18);box-shadow:0 0 18px rgba(34,224,122
 }
 @keyframes glitch{0%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}100%{transform:translateX(0)}}
 
+.note{margin:.85rem 0 0;font-size:10.5px;line-height:1.7;color:var(--faint)}
 .foot{margin-top:.9rem;font-size:10px;letter-spacing:.14em;color:var(--faint);text-align:center}
 
 @media (prefers-reduced-motion:reduce){
@@ -135,7 +136,7 @@ button:hover{background:rgba(34,224,122,.18);box-shadow:0 0 18px rgba(34,224,122
 
         <div class="gate">
           <!--ERROR-->
-          <label for="password">Clé d'accès</label>
+          <label for="password">Clé d'accès administrateur</label>
           <div class="input">
             <span>❯</span>
             <input id="password" name="password" type="password"
@@ -144,6 +145,8 @@ button:hover{background:rgba(34,224,122,.18);box-shadow:0 0 18px rgba(34,224,122
           </div>
           <input type="hidden" name="next" value="<!--NEXT-->">
           <button type="submit">Déverrouiller ▸</button>
+          <p class="note">Compte invité ? Vous n'avez pas de mot de passe :
+            ouvrez le lien à usage unique fourni par l'administrateur.</p>
         </div>
       </div>
     </form>

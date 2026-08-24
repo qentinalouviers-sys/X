@@ -19,6 +19,9 @@ import {
   loginBlocked, readCookie, recordFailure, recordSuccess, sessionCookie, verifyPassword, verifySession,
 } from './lib/auth.js';
 import { clientIp, isSecureRequest, securityHeaders } from './lib/security.js';
+import { ADMIN_CLIENT_JS, handleAdminAction, renderAdmin } from './lib/admin.js';
+import { mailerConfig } from './lib/mailer.js';
+import { consumeInvite, initUserStore, isSessionValid, touch } from './lib/users.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,11 +34,16 @@ const WEB_DIR = path.resolve(__dirname, process.env.WEB_DIR || 'web/dist');
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const AUTH_DISABLED = process.env.AUTH_DISABLED === '1';
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 1_000_000);
+const USERS_FILE = process.env.USERS_FILE || path.join(os.homedir(), '.llm-chat-users.json');
+// Les liens partent par e-mail : mieux vaut une base explicite qu'un en-tête
+// Host, que le client contrôle.
+const BASE_URL = process.env.APP_BASE_URL?.trim().replace(/\/+$/, '') || null;
 
 const API_KEY = resolveApiKey();
 const CREDENTIAL = loadPassword();
 const SESSION_SECRET = loadSessionSecret();
 const LOGIN_PAGE = fs.readFileSync(path.join(__dirname, 'lib/login.html'), 'utf8');
+const USER_COUNT = initUserStore(USERS_FILE);
 
 // `node server.js --hash-password 'secret'` -> APP_PASSWORD_HASH value
 if (process.argv[2] === '--hash-password') {
@@ -242,6 +250,7 @@ async function handleAuth(req, res, secure) {
   }
 
   if (pathname === '/auth/login' && req.method === 'POST') {
+    if (!sameOrigin(req, secure)) return send(res, 403, 'Origine refusée');
     const ip = clientIp(req, TRUST_PROXY);
     const blocked = loginBlocked(ip);
     if (blocked) {
@@ -262,12 +271,34 @@ async function handleAuth(req, res, secure) {
     }
 
     recordSuccess(ip);
-    res.writeHead(303, {
-      location: next,
-      'set-cookie': sessionCookie(issueSession(SESSION_SECRET), secure),
-      'cache-control': 'no-store',
-    });
-    return res.end();
+    return startSession(res, { sub: 'admin', role: 'admin', epoch: 0 }, next, secure);
+  }
+
+  // Lien magique : la seule voie d'entrée des comptes invités.
+  if (pathname === '/auth/magic' && req.method === 'GET') {
+    const ip = clientIp(req, TRUST_PROXY);
+    if (loginBlocked(ip)) {
+      return loginPage(res, { status: 429, error: 'Trop de tentatives. Réessayez plus tard.' });
+    }
+    const { user, error } = consumeInvite(searchParams.get('t') || '');
+    if (error) {
+      recordFailure(ip);
+      console.warn(`[auth] lien magique refusé depuis ${ip}: ${error}`);
+      return loginPage(res, {
+        status: 401,
+        error: `Lien ${error}. Demandez-en un nouveau à l'administrateur.`,
+      });
+    }
+    recordSuccess(ip);
+    console.log(`[auth] session ouverte pour ${user.label} (${user.id}) depuis ${ip}`);
+    return startSession(res, { sub: user.id, role: 'user', epoch: user.sessionEpoch }, '/', secure);
+  }
+
+  // Le front a besoin de savoir s'il doit afficher l'entrée d'administration.
+  if (pathname === '/auth/whoami' && req.method === 'GET') {
+    const session = sessionOf(req);
+    if (!session) return json(res, 401, { error: { code: 'unauthorized' } });
+    return json(res, 200, { role: session.role, sub: session.sub });
   }
 
   if (pathname === '/auth/logout') {
@@ -282,9 +313,81 @@ async function handleAuth(req, res, secure) {
   return send(res, 404, 'Not Found');
 }
 
-function isAuthenticated(req) {
-  if (AUTH_DISABLED) return true;
-  return verifySession(readCookie(req.headers.cookie, COOKIE_NAME), SESSION_SECRET);
+/* ----------------------------------------------------------------- admin */
+
+async function handleAdmin(req, res, session, secure) {
+  if (session.role !== 'admin') {
+    // 404 plutôt que 403 : inutile de confirmer l'existence de la page à un
+    // compte invité.
+    return send(res, 404, 'Not Found');
+  }
+
+  const { pathname, searchParams } = new URL(req.url, 'http://x');
+
+  if (pathname === '/admin.js' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(ADMIN_CLIENT_JS);
+  }
+
+  if (pathname === '/admin' && req.method === 'GET') {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    return res.end(renderAdmin({
+      message: searchParams.get('m') || '',
+      baseUrl: baseUrlOf(req, secure),
+      smtpReady: Boolean(mailerConfig()),
+    }));
+  }
+
+  if (pathname === '/admin/action' && req.method === 'POST') {
+    if (!sameOrigin(req, secure)) return send(res, 403, 'Origine refusée');
+    const body = await readBody(req, 8192).catch(() => '');
+    const message = await handleAdminAction(new URLSearchParams(body), baseUrlOf(req, secure));
+    res.writeHead(303, { location: `/admin?m=${encodeURIComponent(message)}`, 'cache-control': 'no-store' });
+    return res.end();
+  }
+
+  return send(res, 404, 'Not Found');
+}
+
+function startSession(res, claims, next, secure) {
+  res.writeHead(303, {
+    location: next,
+    'set-cookie': sessionCookie(issueSession(SESSION_SECRET, claims), secure),
+    'cache-control': 'no-store',
+  });
+  res.end();
+}
+
+/**
+ * Revendications signées ET toujours honorées par le magasin de comptes : une
+ * signature valide ne suffit pas, sinon désactiver un compte n'aurait aucun
+ * effet avant l'expiration du cookie, soit trente jours.
+ */
+function sessionOf(req) {
+  if (AUTH_DISABLED) return { sub: 'admin', role: 'admin', epoch: 0 };
+  const claims = verifySession(readCookie(req.headers.cookie, COOKIE_NAME), SESSION_SECRET);
+  if (!claims || !isSessionValid(claims)) return null;
+  if (claims.role !== 'admin') touch(claims.sub);
+  return claims;
+}
+
+/** URL publique, pour les liens envoyés par e-mail. */
+function baseUrlOf(req, secure) {
+  if (BASE_URL) return BASE_URL;
+  const host = String(
+    (TRUST_PROXY && req.headers['x-forwarded-host']) || req.headers.host || ''
+  ).split(',')[0].trim();
+  // Un Host bricolé ne doit pas pouvoir fabriquer un lien vers un autre domaine.
+  if (!/^[a-z0-9.\-]+(:\d+)?$/i.test(host)) return '';
+  return `${secure ? 'https' : 'http'}://${host}`;
+}
+
+/** SameSite=Strict couvre déjà le CSRF; ceci est une seconde barrière. */
+function sameOrigin(req, secure) {
+  const origin = req.headers.origin;
+  if (!origin) return true; // les navigateurs l'omettent sur une navigation simple
+  const expected = baseUrlOf(req, secure);
+  return Boolean(expected) && origin === expected;
 }
 
 /* ---------------------------------------------------------------- helpers */
@@ -340,13 +443,18 @@ const server = http.createServer((req, res) => {
     return handleAuth(req, res, secure).catch((err) => send(res, 400, String(err.message)));
   }
 
-  if (!isAuthenticated(req)) {
+  const session = sessionOf(req);
+  if (!session) {
     // XHR gets a status the front can act on; a browser navigation gets the form.
     if (pathname.startsWith('/api/')) {
       return json(res, 401, { error: { code: 'unauthorized', message: 'Session expirée.' } });
     }
     res.writeHead(302, { location: `/auth/login?next=${encodeURIComponent(req.url)}`, 'cache-control': 'no-store' });
     return res.end();
+  }
+
+  if (pathname === '/admin' || pathname.startsWith('/admin/') || pathname === '/admin.js') {
+    return handleAdmin(req, res, session, secure).catch((err) => send(res, 500, String(err.message)));
   }
 
   if (pathname === '/api' || pathname.startsWith('/api/')) return proxy(req, res);
@@ -365,6 +473,8 @@ server.listen(PORT, HOST, () => {
   console.log(`[llm-chat] api key: ${API_KEY ? 'loaded' : 'MISSING'}`);
   console.log(`[llm-chat] auth: ${AUTH_DISABLED ? '*** DÉSACTIVÉE ***' : `active (${CREDENTIAL.kind})`}`);
   console.log(`[llm-chat] trust proxy: ${TRUST_PROXY ? 'oui' : 'non'}`);
+  console.log(`[llm-chat] comptes invités: ${USER_COUNT} (${USERS_FILE})`);
+  console.log(`[llm-chat] smtp: ${mailerConfig() ? `${mailerConfig().host}:${mailerConfig().port}` : 'non configuré'}`);
   if (AUTH_DISABLED && HOST !== '127.0.0.1' && HOST !== 'localhost') {
     console.warn('[llm-chat] ATTENTION: aucune authentification et écoute sur toutes les interfaces.');
   }

@@ -33,6 +33,22 @@ Environment=LLM_UPSTREAM=http://100.96.144.95:8080
 Environment=LLM_API_KEY_FILE=/etc/llm-chat/api-key
 Environment=APP_PASSWORD_FILE=/etc/llm-chat/password
 Environment=SESSION_SECRET_FILE=/var/lib/llm-chat/session-secret
+# Comptes invités. Doit être dans un répertoire inscriptible (ReadWritePaths).
+Environment=USERS_FILE=/var/lib/llm-chat/users.json
+
+# URL publique, utilisée pour fabriquer les liens magiques envoyés par e-mail.
+# Sans elle, le lien est déduit de l'en-tête Host, que le client contrôle.
+Environment=APP_BASE_URL=https://x.eviatek.fr
+
+# Envoi des liens par e-mail (facultatif). Sans SMTP_HOST, l'espace admin se
+# rabat sur la copie manuelle du lien. Le mot de passe du relais gagne à être
+# passé par EnvironmentFile=/etc/llm-chat/smtp.env (chmod 640) plutôt qu'ici :
+# le contenu d'une unité systemd est lisible par tous les comptes.
+#Environment=SMTP_HOST=smtp.exemple.fr
+#Environment=SMTP_PORT=587
+#Environment=SMTP_USER=bot@eviatek.fr
+#Environment=SMTP_FROM=bot@eviatek.fr
+#EnvironmentFile=-/etc/llm-chat/smtp.env
 
 # Durcissement systemd
 NoNewPrivileges=true

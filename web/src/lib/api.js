@@ -13,6 +13,13 @@ function requireSession(res) {
   return res;
 }
 
+/** Rôle du porteur de la session — décide de l'accès à l'espace admin. */
+export async function fetchIdentity(signal) {
+  const res = await fetch('/auth/whoami', { signal, cache: 'no-store' });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export function logout() {
   return fetch('/auth/logout', { method: 'POST' }).finally(() => {
     location.href = '/auth/login';

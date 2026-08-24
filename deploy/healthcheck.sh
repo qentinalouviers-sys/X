@@ -29,6 +29,8 @@ check "écran de connexion (200)" 200 \
   "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/auth/login")"
 check "manifest PWA public (200)" 200 \
   "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/manifest.webmanifest")"
+check "espace admin protégé (302)" 302 \
+  "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$BASE/admin")"
 
 # En-tête de sécurité représentatif du reste.
 if curl -s -I --max-time 5 "$BASE/auth/login" | grep -qi 'content-security-policy'; then

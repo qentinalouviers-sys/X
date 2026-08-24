@@ -9,7 +9,7 @@ function stamp(ts) {
 }
 
 export default function Sidebar({
-  open, onClose, conversations, currentId, onSelect, onCreate, onDelete, fx, onToggleFx, installable, onInstall,
+  open, onClose, conversations, currentId, onSelect, onCreate, onDelete, fx, onToggleFx, installable, onInstall, isAdmin,
 }) {
   return (
     <>
@@ -77,6 +77,11 @@ export default function Sidebar({
         </nav>
 
         <div className="space-y-1.5 border-t border-line p-2">
+          {isAdmin && (
+            <a href="/admin" className="btn block text-center text-acc2 no-underline">
+              ⌸ ESPACE ADMIN
+            </a>
+          )}
           {installable && (
             <button onClick={onInstall} className="btn w-full text-acc2">
               ⤋ INSTALLER L'APP

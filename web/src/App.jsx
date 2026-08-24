@@ -8,12 +8,14 @@ import { useChat } from './hooks/useChat.js';
 import { useConversations } from './hooks/useConversations.js';
 import { useFx, usePwa } from './hooks/usePwa.js';
 import { useServerStatus } from './hooks/useServerStatus.js';
+import { fetchIdentity } from './lib/api.js';
 import { contextUsage } from './lib/tokens.js';
 
 export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [identity, setIdentity] = useState(null);
 
   const {
     conversations, current, settings,
@@ -32,6 +34,8 @@ export default function App() {
     model,
     refreshStatus: refresh,
   });
+
+  useEffect(() => { fetchIdentity().then(setIdentity).catch(() => {}); }, []);
 
   useEffect(() => setDraft(''), [current.id]);
 
@@ -62,6 +66,7 @@ export default function App() {
         onToggleFx={toggleFx}
         installable={installable}
         onInstall={install}
+        isAdmin={identity?.role === 'admin'}
       />
 
       <main className="flex min-w-0 flex-1 flex-col">
